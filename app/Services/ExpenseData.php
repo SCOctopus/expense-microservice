@@ -4,28 +4,33 @@
 namespace App\Services;
 
 use App\Repositories\ConsortiumPercentageRepository;
+use App\Repositories\ExpenseAccountStatusesRepository;
 use App\Repositories\ExpenseAccountStatusRowRepository;
+use App\Repositories\ExpenseFunctionalUnitsRepository;
 use App\Repositories\ExpensePercentageFixedAmountsRepository;
 use App\Repositories\ExpenseRepository;
 use App\Repositories\FunctionalUnitPercentageRepository;
 use App\Repositories\FunctionalUnitRepository;
+use Carbon\Carbon;
 
 class ExpenseData
 {
     private $expense;
     private $consortium;
+    private $functionalUnits;
     private $closeDate;
     private $lastExpense;
-    private $categories;
-    private $consortiumPercentages;
+    public $categories;
+    public $consortiumPercentages;
     private $reprocessExpense = null;
     private $providers = [];
-    private $payslipsSalary = [];
+    public $payslipsSalary = [];
     private $payslipsContribution = [];
     private $allInstallments = [];
     private $installmentsByUF = [];
     private $installmentsByCategory = [];
     private $installmentsByPorcentualUF = [];
+    private $accountStatusByUF = [];
     private $totalSpendingByPercentageProrate = [];
     private $totalSpendingByPercentage = [];
     private $totalSpendingsByCategory = [];
@@ -36,8 +41,14 @@ class ExpenseData
     private $totalParticularPercentageSpendigs = 0;
     private $totalSpendingsProrate = 0;
     private $totalSpendings = 0;
+    private $balanceToPayTotal = 0;
+    private $earlyBalanceToPayTotal = 0;
+    private $roundingTotal = 0;
 
     public function __construct(
+        ExpenseFunctionalUnitsRepository $expenseFunctionalUnitsRepository,
+        FunctionalUnitService $functionalUnitService,
+        ExpenseAccountStatusesRepository $expenseAccountStatusesRepository,
         ExpensePercentageFixedAmountsRepository $expensePercentageFixedAmountsRepository,
         ExpenseAccountStatusRowRepository $expenseAccountStatusRowRepository,
         FunctionalUnitMovementService $functionalUnitMovementService,
@@ -49,6 +60,9 @@ class ExpenseData
         FunctionalUnitPercentageRepository $functionalUnitPercentageRepository,
         ExpenseIncomes $expenseIncomes)
     {
+        $this->expenseFunctionalUnitsRepository = $expenseFunctionalUnitsRepository;
+        $this->functionalUnitService = $functionalUnitService;
+        $this->expenseAccountStatusesRepository = $expenseAccountStatusesRepository;
         $this->expensePercentageFixedAmountRepository = $expensePercentageFixedAmountsRepository;
         $this->functionalUnitPercentageRepository = $functionalUnitPercentageRepository;
         $this->expenseAccountStatusRowRepository = $expenseAccountStatusRowRepository;
@@ -62,11 +76,14 @@ class ExpenseData
     }
 
     public function calculate($expense,
-                              $consortium)
+                              $consortium,
+                              $functionalUnits
+    )
     {
         $this->expense = $expense;
         $this->consortium = $consortium;
-        $this->closeDate = $expense->close_date;
+        $this->functionalUnits = $functionalUnits;
+        $this->closeDate = Carbon::createFromFormat('Y-m-d', $expense->close_date);
         $this->lastExpense = $this->expenseRepository->getLastPrintedExpense($consortium->id);
 
         // this first - prepares data
@@ -173,16 +190,17 @@ class ExpenseData
         $privateSpendingsTotal = 0;
         $i = 0;
 
-        $functionalUnits = $this->functionalUnitRepository->getByConsortium($this->consortium->id);
-
-        foreach ($functionalUnits as $functionalUnit) {
+        //TODO refactor
+        foreach ($this->functionalUnits as $functionalUnit) {
 
             $accountStatusData = [];
 
+            $idLastExpense = !isset($this->lastExpense) ? null : $this->lastExpense->id;
+
             $previousBalance = (float)$this->functionalUnitMovementService->getPreviousBalance(
                 $functionalUnit->id,
-                $this->expense,
-                $this->lastExpense
+                $this->expense->id,
+                $idLastExpense
             );
 
             $payment = $this->expenseIncomes->getPaymentsByFunctionalUnit($functionalUnit->id);
@@ -191,12 +209,15 @@ class ExpenseData
 
             $debt = $this->functionalUnitMovementService->getPreviousDebtFromCloseDate(
                 $functionalUnit->id,
-                $this->expense->close_date,
+                Carbon::createFromFormat('Y-m-d', $this->expense->close_date),
                 $this->expense->penalty_interests_mode
             );
 
             if ($this->lastExpense) {
-                $statusRow = $this->expenseAccountStatusRowRepository->findOneBy($functionalUnit->id, $this->lastExpense['']);
+                $accountStatusLastExpense = $this->expenseAccountStatusesRepository->findByExpense($this->lastExpense->id);
+                $statusRow = $this->expenseAccountStatusRowRepository->findOneBy(
+                    $functionalUnit->id,
+                    $accountStatusLastExpense->id);
                 if ($statusRow) {
                     $previousBalance += (float)$statusRow->rounding;
                 }
@@ -255,12 +276,96 @@ class ExpenseData
 
                 } elseif ($consortiumPercentage->particular_percentage) {
 
-                    //TODO
+                    $value = $this->getFixedTotalByPercentageParticular($consortiumPercentage, $functionalUnit->id);
 
+                    $accountStatusData['ufPercentage'][$consortiumPercentage->id] = [
+                        'percentage' => 0,
+                        'value' => $value
+                    ];
 
+                    $spendings -= $value;
                 }
             }
+
+            $balanceToPay += $spendings;
+
+            $rounding = 0;
+
+            if ($balanceToPay < 0 && ($this->consortium->rounding == 'yes' || $this->consortium->rounding == 'uf')) {
+                $roundedBalanceToPay = round($balanceToPay);
+                $rounding = $roundedBalanceToPay - $balanceToPay;
+                $balanceToPay = $roundedBalanceToPay;
+
+                if ($this->consortium->rounding == 'uf') {
+                    $ufRounding = $functionalUnit->number / 100;
+                    $functionalUnitCents = ($ufRounding >= 1) ? $ufRounding - intval($ufRounding) : $ufRounding;
+                    $rounding -= $functionalUnitCents;
+                    $balanceToPay -= $functionalUnitCents;
+                }
+            }
+
+            $spendings += $rounding;
+            $secondBalanceToPay = 0;
+            $balanceToPayPositive = $balanceToPay * (-1);
+
+            if ($balanceToPayPositive > 0) {
+                if ($this->consortium->second_due_date) {
+                    $secondBalanceToPay = $this->functionalUnitService->calculateSecondDueDatePayment($this->consortium,
+                        $functionalUnit,
+                        $balanceToPay,
+                        $this->expense);
+                }
+            }
+
+            $earlyBalanceToPay = $balanceToPay + ((-1) * ($spendings * $this->consortium->early_payment_discount) / 100);
+
+            $accountStatusData['rounding'] = $rounding;
+            $accountStatusData['spendings'] = $spendings;
+            $accountStatusData['balanceToPay'] = $balanceToPay;
+            $accountStatusData['earlyBalanceToPay'] = $earlyBalanceToPay;
+
+            $this->accountStatusByUF[$functionalUnit->id] = $accountStatusData;
+
+            $lastExpenseCloseDate = $this->lastExpense ? Carbon::createFromFormat('Y-m-d', $this->lastExpense->close_date) : null;
+
+            $payments = $this->functionalUnitMovementService->getPaymentsByFunctionalUnit(
+                $functionalUnit->id,
+                $lastExpenseCloseDate,
+                $this->closeDate,
+                $this->lastExpense);
+
+            $this->expenseIncomes->addIncomes($payments, $functionalUnit, $this->lastExpense);
+
+            //totales para el estado de cuenta
+            $previousBalanceTotal += $previousBalance;
+            $paymentTotal += $payment;
+            $privateSpendingsTotal += $this->getTotalAmountByUf($functionalUnit->id);
+            $this->balanceToPayTotal += $balanceToPay;
+            $this->earlyBalanceToPayTotal += $earlyBalanceToPay;
+            $this->roundingTotal += (float)$rounding;
+
+            //TODO Particular Spending ???
+            $this->expenseFunctionalUnitsRepository->create(
+                [
+                    'expense_id' => $this->expense->id,
+                    'functional_unit_id' => $functionalUnit->id,
+                    'balance_to_pay' => $balanceToPay,
+                    'previous_balance' => $previousBalance,
+                    'last_payment' => $payment,
+                    'month_interests' => $interests * (-1),
+                    'receipt_number' => null,
+                    'second_balance_to_pay' => $secondBalanceToPay,
+                    'spendings' => $spendings,
+                    'early_balance_to_pay' => $earlyBalanceToPay,
+                    'pdf_path' => null,
+                ]
+            );
+
+            $i++;
         }
+
+        $this->expenseRepository->setAmountToCollect($this->expense->id, $this->balanceToPayTotal);
+        $this->expenseRepository->setAmountCollected($this->expense->id, 0);
     }
 
     private function getTotalAmountByUf(int $idFunctionalUnit)
@@ -289,7 +394,24 @@ class ExpenseData
 
     private function getFixedTotalByPercentageParticular($consortiumPercentage, int $idFunctionalUnit)
     {
+        $total = 0;
 
+        $installments = $this->installmentService->listForExpensePercentageParticular(
+            $this->consortium->id,
+            $this->closeDate,
+            $idFunctionalUnit,
+            $this->reprocessExpense
+        );
+
+        foreach ($installments as $i) {
+            foreach ($this->installmentService->getConsortiumPercentages($i->id) as $percentage) {
+                if ($percentage->consortium_percentage_id == $consortiumPercentage->id) {
+                    $total += $percentage->amount;
+                }
+            }
+        }
+
+        return $total;
     }
 
 }

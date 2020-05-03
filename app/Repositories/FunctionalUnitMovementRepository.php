@@ -19,6 +19,7 @@ class FunctionalUnitMovementRepository
     }
 
     public function create($idFunctionalUnit,
+                           $idConsortium,
                            $amount,
                            $date,
                            $description,
@@ -26,11 +27,15 @@ class FunctionalUnitMovementRepository
     {
         return DB::table($this->table)
             ->insert([
+                'id' => DB::raw('nextval(\'functional_unit_movements_id_seq\')'),
                 'functional_unit_id' => $idFunctionalUnit,
+                'administrable_id' => $idConsortium,
                 'date' => $date,
                 'amount' => $amount,
                 'description' => $description,
-                'type' => $type
+                'type' => $type,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
             ]);
     }
 
@@ -142,5 +147,49 @@ class FunctionalUnitMovementRepository
             ->sum('amount');
 
         return (float)$result;
+    }
+
+    public function getPaymentsByFunctionalUnit(int $idFunctionalUnit,
+                                                Carbon $from = null,
+                                                Carbon $to,
+                                                $lastExpense = null)
+    {
+        $qb = DB::table($this->table)
+            ->where('functional_unit_id', $idFunctionalUnit)
+            ->where('amount', '>', 0)
+            ->where('date', $to)
+            ->whereNotNull('operation_id')
+            ->whereIn('type', [
+                'capital',
+                'accumulated_interest',
+                'accumulated_capital',
+                'month_interest',
+                'expiration_interest',
+                'early_payment_discount'
+            ]);
+
+        if ($from) {
+            $qb->where('date', $from);
+        }
+
+        $qb->orWhere(function ($query) use ($idFunctionalUnit, $lastExpense) {
+            if ($lastExpense) {
+                $query->where('expense_id', $lastExpense->id);
+            }
+
+            $query->where('functional_unit_id', $idFunctionalUnit)
+                ->whereNotNull('operation_id')
+                ->where('identified', '=', true)
+                ->whereIn('type', [
+                    'capital',
+                    'accumulated_interest',
+                    'accumulated_capital',
+                    'month_interest',
+                    'expiration_interest',
+                    'early_payment_discount'
+                ]);
+        });
+
+        return $qb->get();
     }
 }

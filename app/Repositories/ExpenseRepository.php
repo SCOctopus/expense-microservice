@@ -51,6 +51,7 @@ class ExpenseRepository
     public function create($data)
     {
         $data = Arr::only($data, $this->fillables);
+        $data['id'] = DB::raw("nextval('expenses_id_seq')");
         $data['created_at'] = Carbon::now()->toString();
         $data['updated_at'] = Carbon::now()->toString();
 
@@ -60,10 +61,29 @@ class ExpenseRepository
         return DB::table($this->table)->find($id);
     }
 
+    public function setAmountToCollect(int $idExpense, $amountToCollect)
+    {
+        return DB::table($this->table)
+            ->where('id', $idExpense)
+            ->update([
+                'amount_to_collect' => $amountToCollect
+            ]);
+    }
+
+    public function setAmountCollected(int $idExpense, $amountCollected)
+    {
+        return DB::table($this->table)
+            ->where('id', $idExpense)
+            ->update([
+                'amount_collected' => $amountCollected
+            ]);
+    }
+
     public function addPercentageFixedAmount($idExpense, $idPercentage, $amount)
     {
         return DB::table('expense_percentage_fixed_amounts')
             ->insertGetId([
+                'id' => DB::raw("nextval('expense_percentage_fixed_amounts_id_seq')"),
                 'expense_id' => $idExpense,
                 'consortium_percentage_id' => $idPercentage,
                 'value' => $amount,

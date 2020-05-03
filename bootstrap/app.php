@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__.'/../vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 (new Laravel\Lumen\Bootstrap\LoadEnvironmentVariables(
     dirname(__DIR__)
@@ -60,6 +60,7 @@ $app->singleton(
 */
 
 $app->configure('app');
+$app->configure('debugbar');
 
 /*
 |--------------------------------------------------------------------------
@@ -72,9 +73,10 @@ $app->configure('app');
 |
 */
 
-// $app->middleware([
-//     App\Http\Middleware\ExampleMiddleware::class
-// ]);
+$app->middleware([
+    App\Http\Middleware\CorsMiddleware::class,
+    App\Http\Middleware\ProfileJsonMiddleware::class
+]);
 
 // $app->routeMiddleware([
 //     'auth' => App\Http\Middleware\Authenticate::class,
@@ -90,7 +92,9 @@ $app->configure('app');
 | totally optional, so you are not required to uncomment this line.
 |
 */
-
+if (env('APP_DEBUG')) {
+    $app->register(Barryvdh\Debugbar\LumenServiceProvider::class);
+}
 // $app->register(App\Providers\AppServiceProvider::class);
 // $app->register(App\Providers\AuthServiceProvider::class);
 // $app->register(App\Providers\EventServiceProvider::class);
@@ -109,7 +113,7 @@ $app->configure('app');
 $app->router->group([
     'namespace' => 'App\Http\Controllers',
 ], function ($router) {
-    require __DIR__.'/../routes/web.php';
+    require __DIR__ . '/../routes/web.php';
 });
 
 return $app;

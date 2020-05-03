@@ -38,13 +38,13 @@ class NoteRepository
         $whereRaw = '';
         switch ($noteType) {
             case 'debt':
-                $whereRaw = 'WHERE notes.is_debt_note = true';
+                $whereRaw = 'notes.is_debt_note = true';
                 break;
             case 'identified':
-                $whereRaw = 'WHERE notes.identified_payments_note = true';
+                $whereRaw = 'notes.identified_payments_note = true';
                 break;
             case 'unidentified':
-                $whereRaw = 'WHERE notes.unidentified_payments_note = true';
+                $whereRaw = 'notes.unidentified_payments_note = true';
                 break;
         }
 

@@ -5,6 +5,7 @@ namespace App\Services;
 
 
 use App\Repositories\FunctionalUnitMovementRepository;
+use Carbon\Carbon;
 
 class FunctionalUnitMovementService
 {
@@ -14,12 +15,13 @@ class FunctionalUnitMovementService
     }
 
     public function create(int $idFunctionalUnit,
+                           int $idConsortium,
                            $amount,
                            $date,
                            $description,
                            $type)
     {
-        $this->functionalUnitMovementRepository->create($idFunctionalUnit, $amount, $date, $description, $type);
+        $this->functionalUnitMovementRepository->create($idFunctionalUnit, $idConsortium, $amount, $date, $description, $type);
     }
 
 
@@ -53,5 +55,15 @@ class FunctionalUnitMovementService
     public function getAccumulatedInterests(int $idFunctionalUnit)
     {
         return $this->functionalUnitMovementRepository->getAccumulatedInterests($idFunctionalUnit);
+    }
+
+    public function getPaymentsByFunctionalUnit(int $idFunctionalUnit, Carbon $from = null, Carbon $to, $lastExpense = null)
+    {
+        if ($from) {
+            $from->startOfDay();
+        }
+        $to->startOfDay();
+
+        return $this->functionalUnitMovementRepository->getPaymentsByFunctionalUnit($idFunctionalUnit, $from, $to, $lastExpense);
     }
 }

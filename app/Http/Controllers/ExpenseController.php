@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Services\ExpenseService;
 use App\Validators\Rules\ExpenseRules;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class ExpenseController extends Controller
 {
-    /** @var ExpenseService  */
+    /** @var ExpenseService */
     protected $expenseService;
 
     /**
@@ -28,8 +29,9 @@ class ExpenseController extends Controller
     public function createDraft(Request $request)
     {
         //Validate Data
-        $idConsortium = $request->only('idConsortium');
-        $validator = Validator::make($request->all(), ExpenseRules::createDraftRules($idConsortium));
+        $data = $request->all();
+        $idConsortium = $data['idConsortium'];
+        $validator = Validator::make($data, ExpenseRules::createDraftRules($idConsortium));
         if ($validator->fails()) {
             return response()->json([
                 'status' => 'failed',
@@ -39,8 +41,7 @@ class ExpenseController extends Controller
         }
 
         //Format Data
-        $data = $this->formatData($request->all());
-        dd($data);
+        $data = $this->formatData($data);
 
         //Generate Draft
         $expenseDraft = $this->expenseService->createDraft($idConsortium, $data);
@@ -58,6 +59,9 @@ class ExpenseController extends Controller
      */
     private function formatData(array $data)
     {
+        $data['closeDate'] = Carbon::createFromFormat('d/m/Y', $data['closeDate']);
+        $data['firstDueDate'] = Carbon::createFromFormat('d/m/Y', $data['firstDueDate']);
+        $data['secondDueDate'] = Carbon::createFromFormat('d/m/Y', $data['secondDueDate']);
         $data['allReceipts'] = filter_var($data['allReceipts'], FILTER_VALIDATE_BOOLEAN);
         $data['makeUnidentifiedNote'] = filter_var($data['makeUnidentifiedNote'], FILTER_VALIDATE_BOOLEAN);
         $data['makeIdentifiedNote'] = filter_var($data['makeIdentifiedNote'], FILTER_VALIDATE_BOOLEAN);

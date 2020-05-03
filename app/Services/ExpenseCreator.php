@@ -3,24 +3,27 @@
 
 namespace App\Services;
 
-
 use App\Repositories\ConsortiumPercentageRepository;
 use App\Repositories\ExpenseRepository;
+use App\Services\ExpenseBuilder\ExpenseCreatePayslip;
 use Carbon\Carbon;
 
 class ExpenseCreator
 {
     public function __construct(
-        ExpenseData $expenseDataService,
+        ExpenseCreatePayslip $expenseCreatePayslip,
+        ExpenseData $expenseData,
         ConsortiumPercentageRepository $consortiumPercentageRepository,
         ExpenseRepository $expenseRepository)
     {
-        $this->expenseDataService = $expenseDataService;
+        $this->expenseCreatePayslip = $expenseCreatePayslip;
+        $this->expenseData = $expenseData;
         $this->consortiumPercentageRepository = $consortiumPercentageRepository;
         $this->expenseRepository = $expenseRepository;
     }
 
     public function createDraft($consortium,
+                                $functionalUnits,
                                 Carbon $closeDate,
                                 $month,
                                 $year,
@@ -38,13 +41,14 @@ class ExpenseCreator
                 'month' => $month,
                 'year' => $year,
                 'status' => 'draft',
-                'closeDate' => $closeDate,
+                'close_date' => $closeDate,
                 'first_due_date' => $firstDueDate,
                 'second_due_date' => $secondDueDate,
                 'second_due_date_interests' => $consortium->second_due_date_interests,
                 'penalty_interests' => $consortium->penalty_interests,
                 'penalty_interests_mode' => $consortium->penalty_interests_mode,
-                'all_receipts' => $allReceipts
+                'all_receipts' => $allReceipts,
+                'manually_edited' => false
             ]);
 
             //Create expense_percentage_fixed_amount
@@ -56,10 +60,10 @@ class ExpenseCreator
             }
 
             //Calculate the expense data (total, totals by category, percentage, etc.)
-            $this->calculateExpenseData($expense);
+            $this->calculateExpenseData($expense, $consortium, $functionalUnits);
 
-            //TODO
-
+            //Creacion sueldos
+            $this->expenseCreatePayslip->create($expense, $this->expenseData);
 
 
         } catch (\Exception $e) {
@@ -67,8 +71,8 @@ class ExpenseCreator
         }
     }
 
-    public function calculateExpenseData($expense)
+    public function calculateExpenseData($expense, $consortium, $functionalUnits)
     {
-        $this->expenseDataService->calculate($expense);
+        $this->expenseData->calculate($expense, $consortium, $functionalUnits);
     }
 }
