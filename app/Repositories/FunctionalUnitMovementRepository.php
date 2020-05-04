@@ -192,4 +192,32 @@ class FunctionalUnitMovementRepository
 
         return $qb->get();
     }
+
+    public function getFUsPenaltyInterests(int $idConsortium, Carbon $closeDate)
+    {
+        return DB::select('
+            SELECT fu.*,
+                   (
+                       SELECT COALESCE(SUM(fum.amount), 0)
+                       FROM functional_unit_movements fum
+                       WHERE fum.functional_unit_id = fu.id
+                   ) AS balance,
+                   (
+                       SELECT COALESCE(SUM(fum.amount), 0)
+                       FROM functional_unit_movements fum
+                       WHERE fum.functional_unit_id = fu.id
+                         AND fum.type = \'debt_capital\'
+                         AND fum.date <= \'' . $closeDate->format('Y-m-d') . '\'
+                   ) AS debt_interests_from_close_date,
+                   (
+                       SELECT COALESCE(SUM(fum.amount), 0)
+                       FROM functional_unit_movements fum
+                       WHERE fum.functional_unit_id = fu.id
+                         AND fum.type IN (\'capital\', \'accumulated_capital\', \'initial_balance\', \'early_payment_discount\')
+                         AND fum.date <= \'' . $closeDate->format('Y-m-d') . '\'
+                   ) AS debt_capital_from_close_date
+            FROM functional_units fu
+            WHERE fu.administrable_id = ' . $idConsortium . '
+        ');
+    }
 }

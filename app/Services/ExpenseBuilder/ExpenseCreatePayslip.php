@@ -33,8 +33,7 @@ class ExpenseCreatePayslip
             $this->createPercentages();
             $this->createPayslipEmployees();
 
-            dd('test');
-
+            //TODO
 
         } catch (\Exception $exception) {
             throw $exception;

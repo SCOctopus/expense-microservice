@@ -66,4 +66,9 @@ class FunctionalUnitMovementService
 
         return $this->functionalUnitMovementRepository->getPaymentsByFunctionalUnit($idFunctionalUnit, $from, $to, $lastExpense);
     }
+
+    public function getFUsPenaltyInterests(int $idConsortium, Carbon $closeDate)
+    {
+        return $this->functionalUnitMovementRepository->getFUsPenaltyInterests($idConsortium, $closeDate);
+    }
 }

@@ -15,7 +15,7 @@ class ExpenseCalculatorService
         $this->consortiumRepository = $consortiumRepository;
     }
 
-    public function calculatePenaltyInterests($consortium, $functionalUnits, $closeDate)
+    public function calculatePenaltyInterests($consortium, $closeDate)
     {
         /**
          * porcentaje de interes y tipo de interes lo saco del consorcio porque todavia no
@@ -24,17 +24,23 @@ class ExpenseCalculatorService
         $interests = $consortium->penalty_interests;
         $penaltyInterestsMode = $consortium->penalty_interests_mode;
 
+        $functionalUnits = $this->functionalUnitMovementService->getFUsPenaltyInterests($consortium->id, $closeDate);
         $movements = [];
 
-        //TODO refactor
         foreach ($functionalUnits as $functionalUnit) {
+            $balance = $functionalUnit->balance;
+
             /** Si saldo es positivo o tiene juicio no calculo intereses */
-            if (($balance = $this->functionalUnitMovementService->getSum($functionalUnit->id)) < 0 && !$functionalUnit->legal_state) {
+            if ($balance < 0 && !$functionalUnit->legal_state) {
                 if ($functionalUnit->forgive_interest) {
                     continue;
                 }
 
-                $debt = $this->functionalUnitMovementService->getPreviousDebtFromCloseDate($functionalUnit->id, $closeDate, $penaltyInterestsMode);
+                if($penaltyInterestsMode == 'interest') {
+                    $debt = $functionalUnit->debt_interests_from_close_date;
+                } else {
+                    $debt = $functionalUnit->debt_capital_from_close_date;
+                }
                 $debt *= -1;
 
                 if ($debt > 0) {
@@ -53,7 +59,6 @@ class ExpenseCalculatorService
                 }
             }
         }
-
         return $movements;
     }
 

@@ -32,7 +32,7 @@ class ExpenseService
                                 array $data,
                                 bool $fresh = true)
     {
-        DB::transaction(function () use ($idConsortium, $data, $fresh) {
+        return DB::transaction(function () use ($idConsortium, $data, $fresh) {
             $consortium = $this->consortiumRepository->find($idConsortium);
             $administration = $this->consortiumRepository->getAdministration($idConsortium);
             $functionalUnits = $this->consortiumRepository->getFunctionalUnits($idConsortium);
@@ -41,7 +41,7 @@ class ExpenseService
                 $data['closeDate'] = Carbon::now();
                 $copyFromPrevious = true;
             } else {
-                $penaltyInterests = $this->expenseCalculatorService->calculatePenaltyInterests($consortium, $functionalUnits, $data['closeDate']);
+                $penaltyInterests = $this->expenseCalculatorService->calculatePenaltyInterests($consortium, $data['closeDate']);
                 $copyFromPrevious = false;
             }
 
@@ -88,8 +88,7 @@ class ExpenseService
             );
 
             // TODO
-            dd($expense);
+            return $expense;
         });
-
     }
 }

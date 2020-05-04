@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Validator;
 
 class ExpenseController extends Controller
 {
-    /** @var ExpenseService */
+    /** @var ExpenseService  */
     protected $expenseService;
 
     /**
@@ -30,7 +30,7 @@ class ExpenseController extends Controller
     {
         //Validate Data
         $data = $request->all();
-        $idConsortium = $data['idConsortium'];
+        $idConsortium = $data['idConsortium'] ?? null;
         $validator = Validator::make($data, ExpenseRules::createDraftRules($idConsortium));
         if ($validator->fails()) {
             return response()->json([
@@ -59,9 +59,9 @@ class ExpenseController extends Controller
      */
     private function formatData(array $data)
     {
-        $data['closeDate'] = Carbon::createFromFormat('d/m/Y', $data['closeDate']);
-        $data['firstDueDate'] = Carbon::createFromFormat('d/m/Y', $data['firstDueDate']);
-        $data['secondDueDate'] = Carbon::createFromFormat('d/m/Y', $data['secondDueDate']);
+        $data['closeDate'] = Carbon::createFromFormat('!d/m/Y', $data['closeDate']);
+        $data['firstDueDate'] = Carbon::createFromFormat('!d/m/Y', $data['firstDueDate']);
+        $data['secondDueDate'] = Carbon::createFromFormat('!d/m/Y', $data['secondDueDate']);
         $data['allReceipts'] = filter_var($data['allReceipts'], FILTER_VALIDATE_BOOLEAN);
         $data['makeUnidentifiedNote'] = filter_var($data['makeUnidentifiedNote'], FILTER_VALIDATE_BOOLEAN);
         $data['makeIdentifiedNote'] = filter_var($data['makeIdentifiedNote'], FILTER_VALIDATE_BOOLEAN);

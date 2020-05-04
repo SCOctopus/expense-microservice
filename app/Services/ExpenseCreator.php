@@ -65,7 +65,9 @@ class ExpenseCreator
             //Creacion sueldos
             $this->expenseCreatePayslip->create($expense, $this->expenseData);
 
+            //TODO
 
+            return $expense;
         } catch (\Exception $e) {
             throw $e;
         }
