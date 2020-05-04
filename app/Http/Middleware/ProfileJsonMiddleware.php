@@ -24,8 +24,12 @@ class ProfileJsonMiddleware
             is_object($response->getData())
         ) {
             $response->setData($response->getData(true) + [
-                    '_debugbar' => app('debugbar')->getData(),
-                ]);
+                '_debugbar' => [
+                    'queries' => [
+                        'nb_statements' => app('debugbar')->getData()['queries']['nb_statements']
+                    ]
+                ]
+            ]);
         }
         return $response;
     }
